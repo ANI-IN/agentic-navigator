@@ -445,32 +445,32 @@ const steps = [
 ];
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   STATE PERSISTENCE — FIX: removed localStorage, use React state only
+   STATE PERSISTENCE
    ═══════════════════════════════════════════════════════════════════════════ */
 const defaultState = { step: 0, completed: [], xp: 0, answers: {}, streak: 0, maxStreak: 0, started: Date.now() };
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   STORAGE HELPERS — using window.storage API
+   STORAGE HELPERS — localStorage for standalone deployment
    ═══════════════════════════════════════════════════════════════════════════ */
 const STORE_KEY = "agentic-ai-nav-v3";
 
-async function loadFromStorage() {
+function loadFromStorageSync() {
   try {
-    const result = await window.storage.get(STORE_KEY);
-    if (result && result.value) {
-      return { ...defaultState, ...JSON.parse(result.value) };
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) {
+      return { ...defaultState, ...JSON.parse(raw) };
     }
   } catch {
-    // key doesn't exist yet
+    // storage unavailable or corrupt
   }
   return { ...defaultState };
 }
 
-async function saveToStorage(s) {
+function saveToStorage(s) {
   try {
-    await window.storage.set(STORE_KEY, JSON.stringify(s));
+    localStorage.setItem(STORE_KEY, JSON.stringify(s));
   } catch {
-    // storage unavailable
+    // storage full or unavailable
   }
 }
 
@@ -862,8 +862,9 @@ const SidebarItem = memo(function SidebarItem({ s, idx, active, done, unlocked, 
    MAIN APP — FIX: useEffect dependencies, stable callbacks, responsive
    ═══════════════════════════════════════════════════════════════════════════ */
 function AppCore() {
-  const [prog, setProg] = useState(defaultState);
-  const [loading, setLoading] = useState(true);
+  // Initialize directly from localStorage — synchronous, no race condition
+  const [prog, setProg] = useState(() => loadFromStorageSync());
+  const [loading] = useState(false);
   const [sidebar, setSidebar] = useState(false);
   const [confetti, setConfetti] = useState(false);
   const [modal, setModal] = useState(false);
@@ -878,22 +879,14 @@ function AppCore() {
   const completePct = (prog.completed.length / steps.length) * 100;
   const allDone = prog.completed.length === steps.length;
 
-  // Load saved state on mount
+  // Show welcome back toast on mount
   useEffect(() => {
-    let cancelled = false;
-    loadFromStorage().then(saved => {
-      if (cancelled) return;
-      setProg(saved);
-      setLoading(false);
-      if (saved.step > 0) {
-        // Defer toast slightly
-        setTimeout(() => {
-          toast.show(`Welcome back — resuming Module ${saved.step + 1}`, "info");
-        }, 300);
-      }
-      mountedRef.current = true;
-    });
-    return () => { cancelled = true; };
+    if (prog.step > 0) {
+      setTimeout(() => {
+        toast.show(`Welcome back — resuming Module ${prog.step + 1}`, "info");
+      }, 300);
+    }
+    mountedRef.current = true;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Save state changes (debounced)
@@ -1225,7 +1218,7 @@ function AppCore() {
                 <div style={{ fontSize: 44, marginBottom: 10 }} aria-hidden="true">🎓</div>
                 <h2 style={{ fontSize: "clamp(1.1rem, 4vw, 1.35rem)", fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>Congratulations!</h2>
                 <p style={{ color: "var(--text-secondary)", fontSize: "0.88rem", lineHeight: 1.55, maxWidth: 480, margin: "0 auto 16px" }}>
-                  You've mastered the basics of Agentic AI.
+                  You've mastered the full Agentic AI curriculum — from ReAct fundamentals through Advanced RAG, evaluation, multi-agent orchestration, and production systems.
                 </p>
                 <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 18px", borderRadius: 8, background: "linear-gradient(135deg, #0d9488, #0891b2)", fontSize: 13, fontWeight: 600, color: "#f0fdfa", flexWrap: "wrap", justifyContent: "center" }}>
                   ⚡ {prog.xp} / {totalXP} XP · 🔥 Best Streak: {prog.maxStreak}
