@@ -1,9 +1,21 @@
 import { useState, useEffect, useCallback, useRef, useMemo, createContext, useContext, memo } from "react";
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   DATA — 15 STEPS ACROSS 5 PHASES (WITH DETAILED NODE DESCRIPTIONS)
+   HELPER: HAPTIC FEEDBACK
    ═══════════════════════════════════════════════════════════════════════════ */
+const triggerHaptic = (type) => {
+  if (typeof navigator !== "undefined" && navigator.vibrate) {
+    try {
+      if (type === "success") navigator.vibrate([100]); // Single solid pop
+      if (type === "error") navigator.vibrate([40, 60, 40]); // Double stutter
+      if (type === "warn") navigator.vibrate([30]); // Light tick
+    } catch (e) { /* ignore */ }
+  }
+};
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   DATA — 15 STEPS ACROSS 5 PHASES (With Snippets & Playgrounds)
+   ═══════════════════════════════════════════════════════════════════════════ */
 const phases = [
   { id: "A", name: "Agent Foundations", color: "#14b8a6", icon: "⚡", range: [1, 6] },
   { id: "B", name: "RAG Deep Dive", color: "#3b82f6", icon: "🧠", range: [7, 10] },
@@ -67,6 +79,7 @@ const steps = [
   {
     id: 3, phase: "A", title: "Multi-Agent Systems", conceptName: "LangGraph Architectures", icon: "🔗",
     markdownContent: `### Orchestrating Complexity\nWhen building automated workflows that require robust decision-making, a single agent often fails. It gets confused by too many tools or loses focus. **LangGraph** introduces a way to orchestrate multiple agents as nodes in a cyclical graph.\n\nInstead of one monolithic prompt, you divide the work:\n\n- **Nodes:** Represent individual, specialized agents (e.g., a 'Researcher' agent, a 'Coder' agent, a 'Reviewer' agent) or specific Python/Node automated functions.\n- **Edges:** Determine the flow of control.\n- **Conditional Edges:** Act as routers. For example, a Supervisor agent evaluates the input and routes the task to either the Researcher or the Coder.\n- **State:** A shared memory object passed between nodes. Every node reads from and updates this state, ensuring total continuity.`,
+    codeSnippet: `from langgraph.graph import StateGraph, END\nfrom typing import TypedDict, Annotated\nimport operator\n\n# 1. Define the Shared Memory (State)\nclass AgentState(TypedDict):\n    task: str\n    research_data: str\n    final_code: str\n\n# 2. Initialize the Graph\nworkflow = StateGraph(AgentState)\n\n# 3. Add Specialist Nodes\nworkflow.add_node("researcher", research_node_function)\nworkflow.add_node("coder", coder_node_function)\n\n# 4. Define Control Flow\nworkflow.set_entry_point("researcher")\nworkflow.add_edge("researcher", "coder")\nworkflow.add_edge("coder", END)\n\n# 5. Compile into an Executable App\napp = workflow.compile()`,
     keyTakeaways: ["Multi-agent systems divide work among specialists", "LangGraph models workflows as cyclical graphs", "Conditional edges enable intelligent routing", "Shared state ensures continuity between agents"],
     diagram: {
       nodes: [
@@ -117,6 +130,7 @@ const steps = [
   {
     id: 5, phase: "A", title: "Tool Use", conceptName: "Reliable Tool Calling", icon: "🔧",
     markdownContent: `### What "Tool Calling" Really Means\nTool calling is not magic. It is **structured I/O** between the model and external functions.\n\nA reliable tool call requires:\n1. **Clear tool contract:** name, input schema, output schema\n2. **Validation:** reject malformed tool inputs\n3. **Error handling:** timeouts, retries, fallbacks\n4. **Observation discipline:** tool output must be summarized and fed back into the agent loop\n\n### Common Failure Modes\n- The agent calls the wrong tool because tool descriptions are vague\n- The agent passes invalid parameters\n- The agent gets a tool error and panics (or loops)\n- The agent leaks tool output directly without checking correctness\n\n### Best Practice: Tool Routing Layer\nImplement a strict schema, parameter constraints, safe defaults, and explicit tool budgets (max calls).`,
+    codeSnippet: `import { z } from "zod";\n\n// 1. Define the strict tool schema\nconst weatherToolSchema = z.object({\n  location: z.string().describe("The city name, e.g. London"),\n  unit: z.enum(["celsius", "fahrenheit"]).default("celsius")\n});\n\n// 2. The Tool Definition\nconst getWeatherTool = {\n  name: "get_weather",\n  description: "Fetches current weather. Requires a location.",\n  schema: weatherToolSchema,\n  execute: async (params) => {\n    // 3. Runtime validation before execution\n    const parsed = weatherToolSchema.parse(params);\n    return await fetchApi(parsed.location, parsed.unit);\n  }\n};`,
     keyTakeaways: ["Tool calling = structured I/O with validation", "Vague tool descriptions cause wrong tool selection", "Always validate inputs before execution", "Tool budgets prevent runaway costs"],
     diagram: {
       nodes: [
@@ -235,6 +249,7 @@ const steps = [
   {
     id: 10, phase: "B", title: "Prompt Assembly", conceptName: "Grounded Generation", icon: "🧩",
     markdownContent: `### Prompt Assembly is Where RAG Becomes Reliable\nRAG fails when retrieved text is not inserted correctly.\n\n**A good grounded prompt includes:**\n- Clear role and constraints\n- Instruction to only use provided context\n- Formatting expectations (bullets, steps, citations)\n- "Refuse if missing data" behavior\n\n### Context Packing Rules\n- Keep chunks separated with boundaries\n- Include metadata headers (source, section)\n- Prefer fewer high-quality chunks over many noisy chunks\n- If context conflicts, instruct the model to highlight uncertainty\n\n### Core Reliability Pattern\n- "If the answer is not in the context, say you don't have enough info."\n- "Never invent names, numbers, or policies."`,
+    codeSnippet: `const buildRAGPrompt = (query, retrievedChunks) => \`\n# ROLE\nYou are a precise corporate assistant. You ONLY answer based on the provided CONTEXT.\n\n# CONTEXT\n\${retrievedChunks.map((c, i) => \n  \`[Source \${i+1}: \${c.metadata.title}]\n\${c.text}\`\n).join('\\n\\n')}\n\n# INSTRUCTIONS\n1. If the answer is not in the CONTEXT, explicitly state: "I don't have enough info."\n2. Do not invent numbers or policies.\n3. Cite your sources using [Source X].\n\n# USER QUERY\n\${query}\n\`;`,
     keyTakeaways: ["Prompt assembly makes or breaks RAG quality", "Include role, constraints, and refusal instructions", "Separate chunks with clear boundaries", "Fewer quality chunks > many noisy chunks"],
     diagram: {
       nodes: [
@@ -258,6 +273,17 @@ const steps = [
   {
     id: 11, phase: "C", title: "RAG Evaluation", conceptName: "Groundedness and Relevance", icon: "📊",
     markdownContent: `### Without Evaluation, You're Guessing\nEvaluation tells you whether changes improved the system or silently broke it.\n\n### Key Metrics\n- **Groundedness (Faithfulness):** every claim supported by retrieved context\n- **Answer Relevance:** does it answer the question asked\n- **Context Precision:** how much retrieved context is actually useful\n- **Context Recall:** did retrieval include all required evidence\n\n### Offline Evaluation\n- Create a small "golden set" of questions with expected evidence\n- Run automated scoring + spot-check manually\n- Compare chunking, retrievers, prompts, and models\n\n### Online Evaluation\nTrack failure categories: missing retrieval, wrong retrieval, good retrieval but bad synthesis, refusal when it should answer.`,
+    
+    // NEW TIER 3: Interactive RAG Playground
+    playground: {
+      type: "rag-eval",
+      scenario: {
+        query: "What is our company's remote work policy for new hires?",
+        context: "[Source: Employee Handbook v2]\nEmployees who have been with the company for over 12 months are eligible for up to 3 days of remote work per week. Remote work days must be approved by the department manager.",
+        llmAnswer: "New hires are fully eligible for remote work immediately upon joining the company, and they can work from anywhere without manager approval.",
+      }
+    },
+    
     keyTakeaways: ["Evaluation separates improvement from guessing", "Groundedness = claims supported by context", "Golden sets enable systematic comparison", "Track failure categories for targeted fixes"],
     diagram: {
       nodes: [
@@ -384,7 +410,7 @@ const steps = [
    STATE PERSISTENCE
    ═══════════════════════════════════════════════════════════════════════════ */
 const defaultState = { step: 0, completed: [], xp: 0, answers: {}, streak: 0, maxStreak: 0, started: Date.now() };
-const STORE_KEY = "agentic-ai-nav-v4";
+const STORE_KEY = "agentic-ai-nav-v5";
 
 function loadFromStorageSync() {
   try {
@@ -408,21 +434,21 @@ function ToastProvider({ children }) {
   const show = useCallback((msg, type = "info") => {
     const id = Date.now() + Math.random();
     setToasts(p => [...p, { id, msg, type }]);
-    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3200);
+    setTimeout(() => setToasts(p => p.filter(t => t.id !== id)), 3500);
   }, []);
   const colors = { info: "#0891b2", success: "#16a34a", warn: "#d97706", error: "#dc2626" };
   
   return (
     <ToastCtx.Provider value={{ show }}>
       {children}
-      <div style={{ position: "fixed", bottom: "max(20px, env(safe-area-inset-bottom, 20px))", right: 20, zIndex: 200, display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ position: "fixed", bottom: "max(20px, env(safe-area-inset-bottom, 20px))", right: 20, zIndex: 999, display: "flex", flexDirection: "column", gap: 8, pointerEvents: "none" }}>
         {toasts.map(t => (
           <div key={t.id} role="alert" aria-live="polite" style={{
-            padding: "10px 18px", borderRadius: 10, fontSize: 13, fontWeight: 500, color: "#f0fdfa",
-            background: `linear-gradient(135deg, ${colors[t.type]}dd, ${colors[t.type]}88)`,
+            padding: "12px 20px", borderRadius: 10, fontSize: 14, fontWeight: 600, color: "#f0fdfa",
+            background: `linear-gradient(135deg, ${colors[t.type]}ee, ${colors[t.type]}aa)`,
             backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
-            border: `1px solid ${colors[t.type]}55`, animation: "toast-in 0.35s ease forwards", maxWidth: 320,
-            fontFamily: "var(--font-body)"
+            border: `1px solid ${colors[t.type]}77`, animation: "toast-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) forwards", maxWidth: 360,
+            fontFamily: "var(--font-body)", boxShadow: "0 10px 25px rgba(0,0,0,0.3)"
           }}>{t.msg}</div>
         ))}
       </div>
@@ -450,7 +476,7 @@ const CSS_VARS = `
 `;
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   SVG DIAGRAM WITH INTERACTIVE NODE INSPECTOR
+   TIER 1/3: INTERACTIVE DIAGRAM (A11Y Keyboard Accessible)
    ═══════════════════════════════════════════════════════════════════════════ */
 const Diagram = memo(function Diagram({ data, stepId }) {
   const boxRef = useRef(null);
@@ -525,7 +551,7 @@ const Diagram = memo(function Diagram({ data, stepId }) {
         borderRadius: 12, overflow: "hidden", padding: 6, border: "1px solid var(--border-accent)",
         background: "linear-gradient(145deg, rgba(2,6,23,0.95), rgba(15,23,42,0.9))", position: "relative", width: "100%"
       }}>
-        <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", maxHeight: H }} preserveAspectRatio="xMidYMid meet">
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ display: "block", maxHeight: H }} preserveAspectRatio="xMidYMid meet" aria-label="Architecture Diagram" role="img">
           <defs>
             <filter id={`glow-${stepId}`} x="-40%" y="-40%" width="180%" height="180%">
               <feGaussianBlur stdDeviation="4" result="b" />
@@ -561,9 +587,18 @@ const Diagram = memo(function Diagram({ data, stepId }) {
             
             return (
               <g key={n.id} transform={`translate(${n.px},${n.py})`}
-                style={{ animation: `fade-in 0.35s ease ${i * 0.06}s both`, cursor: 'pointer' }}
+                style={{ animation: `fade-in 0.35s ease ${i * 0.06}s both`, cursor: 'pointer', outline: 'none' }}
                 onClick={() => setActiveNode(n)}
                 onMouseEnter={() => setActiveNode(n)}
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setActiveNode(n);
+                  }
+                }}
+                role="button"
+                aria-label={`Inspect node: ${n.label.replace('\n', ' ')}`}
               >
                 {n.type === "terminal" ? (
                   <ellipse cx={NW / 2} cy={NH / 2} rx={NW / 2} ry={NH / 2}
@@ -591,7 +626,7 @@ const Diagram = memo(function Diagram({ data, stepId }) {
         background: activeNode ? "var(--bg-elevated)" : "transparent",
         border: activeNode ? `1px solid ${nodeColors[activeNode.type]?.border || "var(--border-subtle)"}` : "1px dashed var(--border-subtle)",
         transition: "all 0.3s ease", display: "flex", flexDirection: "column", justifyContent: "center"
-      }}>
+      }} aria-live="polite">
         {activeNode ? (
           <div className="fade-in">
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
@@ -617,9 +652,9 @@ const Diagram = memo(function Diagram({ data, stepId }) {
 });
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   PERSONAL NOTES SCRATCHPAD
+   TIER 1/2: PERSONAL NOTES SCRATCHPAD (With Clear Button)
    ═══════════════════════════════════════════════════════════════════════════ */
-const NotesPad = memo(function NotesPad({ stepId }) {
+const NotesPad = memo(function NotesPad({ stepId, onNoteStateChange }) {
   const [note, setNote] = useState("");
   const [savedStatus, setSavedStatus] = useState("");
   const timeoutRef = useRef(null);
@@ -637,10 +672,26 @@ const NotesPad = memo(function NotesPad({ stepId }) {
     
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
-      localStorage.setItem(`agentic-notes-${stepId}`, val);
-      setSavedStatus("Saved to device");
+      if (val.trim() === "") {
+        localStorage.removeItem(`agentic-notes-${stepId}`);
+        onNoteStateChange(stepId, false);
+      } else {
+        localStorage.setItem(`agentic-notes-${stepId}`, val);
+        onNoteStateChange(stepId, true);
+      }
+      setSavedStatus("Saved");
       setTimeout(() => setSavedStatus(""), 2000);
     }, 800);
+  };
+
+  const handleClear = () => {
+    if (window.confirm("Are you sure you want to delete notes for this module?")) {
+      setNote("");
+      localStorage.removeItem(`agentic-notes-${stepId}`);
+      onNoteStateChange(stepId, false);
+      setSavedStatus("Cleared");
+      setTimeout(() => setSavedStatus(""), 2000);
+    }
   };
 
   return (
@@ -650,23 +701,144 @@ const NotesPad = memo(function NotesPad({ stepId }) {
           <span style={{ fontSize: 14 }}>📝</span>
           <h4 style={{ fontFamily: "var(--font-mono)", fontSize: 11, fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.08em", margin: 0 }}>My Notes</h4>
         </div>
-        <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--text-accent)", transition: "opacity 0.3s", opacity: savedStatus ? 1 : 0 }}>
-          {savedStatus}
-        </span>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ fontSize: 10, fontFamily: "var(--font-mono)", color: "var(--text-accent)", transition: "opacity 0.3s", opacity: savedStatus ? 1 : 0 }}>
+            {savedStatus}
+          </span>
+          {note.length > 0 && (
+            <button onClick={handleClear} style={{ fontSize: 11, background: "none", border: "none", color: "#fca5a5", cursor: "pointer", fontFamily: "var(--font-mono)", display: "flex", alignItems: "center", gap: 4 }}>
+              🗑️ Clear
+            </button>
+          )}
+        </div>
       </div>
       <textarea
         value={note}
         onChange={handleChange}
         placeholder="Jot down key concepts, code ideas, or personal takeaways here. Notes are saved automatically to your browser..."
         style={{
-          width: "100%", minHeight: 120, background: "var(--bg-card)", color: "var(--text-secondary)",
+          width: "100%", minHeight: 100, background: "var(--bg-card)", color: "var(--text-secondary)",
           border: "1px solid rgba(51,65,85,0.5)", borderRadius: 8, padding: 12,
           fontSize: "0.88rem", fontFamily: "var(--font-body)", lineHeight: 1.6,
-          resize: "vertical", outline: "none"
+          resize: "vertical", outline: "none", transition: "border 0.2s"
         }}
         onFocus={(e) => e.target.style.border = "1px solid var(--accent)"}
         onBlur={(e) => e.target.style.border = "1px solid rgba(51,65,85,0.5)"}
       />
+    </div>
+  );
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TIER 3: INTERACTIVE PLAYGROUND (RAG EVALUATION)
+   ═══════════════════════════════════════════════════════════════════════════ */
+const RagPlayground = memo(function RagPlayground({ data, onPass }) {
+  const [groundedness, setGroundedness] = useState(50);
+  const [relevance, setRelevance] = useState(50);
+  const [submitted, setSubmitted] = useState(false);
+  const [passed, setPassed] = useState(false);
+
+  // In this scenario, Groundedness is LOW (0) because answer isn't in context.
+  // Relevance is HIGH (100) because it directly answers the user's question.
+  const checkAnswer = () => {
+    setSubmitted(true);
+    // Lenient grading threshold
+    if (groundedness <= 30 && relevance >= 70) {
+      setPassed(true);
+      triggerHaptic('success');
+      onPass();
+    } else {
+      setPassed(false);
+      triggerHaptic('error');
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 24, padding: 20, borderRadius: 12, background: "rgba(15,23,42,0.8)", border: "1px solid var(--border-accent)" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+        <span style={{ fontSize: 18 }}>🎮</span>
+        <h4 style={{ fontFamily: "var(--font-mono)", fontSize: 12, fontWeight: 700, color: "var(--text-accent)", textTransform: "uppercase", letterSpacing: "0.08em", margin: 0 }}>Interactive RAG Evaluation</h4>
+      </div>
+      
+      <p style={{ fontSize: "0.88rem", color: "var(--text-secondary)", marginBottom: 16 }}>
+        Read the following scenario. You are the 'Evaluator' LLM. Grade the generated answer.
+      </p>
+
+      <div style={{ background: "rgba(2,6,23,0.8)", padding: 14, borderRadius: 8, marginBottom: 10 }}>
+        <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: 4 }}>USER QUERY</div>
+        <div style={{ color: "var(--text-primary)", fontSize: "0.9rem" }}>{data.query}</div>
+      </div>
+
+      <div style={{ background: "rgba(2,6,23,0.8)", padding: 14, borderRadius: 8, marginBottom: 10, borderLeft: "3px solid var(--accent)" }}>
+        <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: 4 }}>RETRIEVED CONTEXT</div>
+        <div style={{ color: "var(--text-secondary)", fontSize: "0.85rem", fontStyle: "italic" }}>{data.context}</div>
+      </div>
+
+      <div style={{ background: "rgba(2,6,23,0.8)", padding: 14, borderRadius: 8, marginBottom: 20, borderLeft: "3px solid #f59e0b" }}>
+        <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-mono)", marginBottom: 4 }}>LLM ANSWER</div>
+        <div style={{ color: "var(--text-primary)", fontSize: "0.9rem" }}>{data.llmAnswer}</div>
+      </div>
+
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+          <label style={{ fontSize: "0.85rem", color: "var(--text-primary)", fontWeight: 600 }}>Groundedness (Faithfulness to context)</label>
+          <span style={{ fontSize: "0.85rem", color: "var(--text-accent)", fontFamily: "var(--font-mono)" }}>{groundedness}/100</span>
+        </div>
+        <input type="range" min="0" max="100" value={groundedness} onChange={(e) => setGroundedness(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--accent)" }} />
+      </div>
+
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+          <label style={{ fontSize: "0.85rem", color: "var(--text-primary)", fontWeight: 600 }}>Answer Relevance (Addresses the query)</label>
+          <span style={{ fontSize: "0.85rem", color: "var(--text-accent)", fontFamily: "var(--font-mono)" }}>{relevance}/100</span>
+        </div>
+        <input type="range" min="0" max="100" value={relevance} onChange={(e) => setRelevance(Number(e.target.value))} style={{ width: "100%", accentColor: "var(--accent)" }} />
+      </div>
+
+      <button onClick={checkAnswer} style={{ width: "100%", padding: "10px", borderRadius: 8, background: "linear-gradient(135deg, #0d9488, #0891b2)", color: "#fff", fontWeight: 600, border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+        Submit Evaluation
+      </button>
+
+      {submitted && (
+        <div className="fade-in" style={{ marginTop: 16, padding: 14, borderRadius: 8, background: passed ? "rgba(22,163,74,0.1)" : "rgba(220,38,38,0.1)", border: passed ? "1px solid rgba(34,197,94,0.3)" : "1px solid rgba(239,68,68,0.3)" }}>
+          <strong style={{ color: passed ? "#86efac" : "#fca5a5", fontSize: "0.9rem", display: "block", marginBottom: 4 }}>
+            {passed ? "🎯 Correct Evaluation!" : "❌ Incorrect Evaluation"}
+          </strong>
+          <span style={{ color: "var(--text-secondary)", fontSize: "0.85rem", lineHeight: 1.4, display: "block" }}>
+            The answer is highly **Relevant** (it directly answers the question) but has zero **Groundedness** (the context says new hires need 12 months, but the LLM hallucinated that they are eligible immediately).
+          </span>
+        </div>
+      )}
+    </div>
+  );
+});
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   TIER 2: CODE SNIPPET VS THEORY TOGGLE
+   ═══════════════════════════════════════════════════════════════════════════ */
+const ContentBlock = memo(function ContentBlock({ step }) {
+  const [viewMode, setViewMode] = useState("theory");
+
+  useEffect(() => setViewMode("theory"), [step.id]); // Reset on step change
+
+  return (
+    <div style={{ marginTop: 20 }}>
+      {step.codeSnippet && (
+        <div style={{ display: "flex", gap: 4, marginBottom: 16, background: "var(--bg-elevated)", padding: 4, borderRadius: 8, width: "fit-content", border: "1px solid var(--border-subtle)" }}>
+          <button onClick={() => setViewMode("theory")} style={{ padding: "6px 14px", borderRadius: 6, fontSize: "0.8rem", fontWeight: 600, border: "none", cursor: "pointer", background: viewMode === "theory" ? "rgba(20,184,166,0.15)" : "transparent", color: viewMode === "theory" ? "var(--text-accent)" : "var(--text-muted)" }}>Theory</button>
+          <button onClick={() => setViewMode("code")} style={{ padding: "6px 14px", borderRadius: 6, fontSize: "0.8rem", fontWeight: 600, border: "none", cursor: "pointer", background: viewMode === "code" ? "rgba(20,184,166,0.15)" : "transparent", color: viewMode === "code" ? "var(--text-accent)" : "var(--text-muted)" }}>Code</button>
+        </div>
+      )}
+      
+      {viewMode === "theory" ? (
+        <div className="fade-in"><Md text={step.markdownContent} /></div>
+      ) : (
+        <div className="fade-in" style={{ background: "#0d1117", padding: 16, borderRadius: 8, border: "1px solid #1e293b", overflowX: "auto" }}>
+          <pre style={{ margin: 0, color: "#e2e8f0", fontFamily: "var(--font-mono)", fontSize: "0.85rem", lineHeight: 1.5 }}>
+            <code>{step.codeSnippet}</code>
+          </pre>
+        </div>
+      )}
     </div>
   );
 });
@@ -691,7 +863,7 @@ const Md = memo(function Md({ text }) {
 });
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   QUIZ (With Hint System)
+   QUIZ
    ═══════════════════════════════════════════════════════════════════════════ */
 const Quiz = memo(function Quiz({ act, stepId, savedAns, onAnswer }) {
   const letters = ["A", "B", "C", "D"];
@@ -713,7 +885,6 @@ const Quiz = memo(function Quiz({ act, stepId, savedAns, onAnswer }) {
   const [sel, setSel] = useState(savedShuffledAns);
   const [show, setShow] = useState(savedAns != null);
   const [shake, setShake] = useState(null);
-  
   const [failedAttempts, setFailedAttempts] = useState(0); 
   const ok = sel === shuffledCorrectIndex;
 
@@ -728,10 +899,12 @@ const Quiz = memo(function Quiz({ act, stepId, savedAns, onAnswer }) {
     setSel(displayIdx);
     if (displayIdx === shuffledCorrectIndex) {
       setShow(true);
+      triggerHaptic("success");
       onAnswer(act.correctIndex);
     } else {
       setShake(displayIdx);
       setFailedAttempts(p => p + 1);
+      triggerHaptic("error");
       setTimeout(() => setShake(null), 500);
     }
   }, [show, shuffledCorrectIndex, onAnswer, act.correctIndex]);
@@ -800,9 +973,57 @@ const Quiz = memo(function Quiz({ act, stepId, savedAns, onAnswer }) {
 });
 
 /* ═══════════════════════════════════════════════════════════════════════════
+   TIER 3: ENDLESS REVIEW MODE (Spaced Repetition)
+   ═══════════════════════════════════════════════════════════════════════════ */
+function ReviewMode({ onExit, onCorrectScore }) {
+  const [qQueue, setQQueue] = useState(() => [...steps].sort(() => 0.5 - Math.random()));
+  const [qIndex, setQIndex] = useState(0);
+  const [streak, setStreak] = useState(0);
+
+  const currentStep = qQueue[qIndex];
+
+  const handleReviewAnswer = (ans) => {
+    if (ans === currentStep.activity.correctIndex) {
+      setStreak(s => s + 1);
+      onCorrectScore(10); // Reward 10 XP for review questions
+      setTimeout(() => {
+        // Go to next question, endlessly re-queueing
+        if (qIndex + 1 >= qQueue.length) {
+          setQQueue([...steps].sort(() => 0.5 - Math.random()));
+          setQIndex(0);
+        } else {
+          setQIndex(qIndex + 1);
+        }
+      }, 1500);
+    } else {
+      setStreak(0);
+    }
+  };
+
+  return (
+    <div className="fade-in" style={{ maxWidth: "var(--content-max)", margin: "0 auto", padding: "40px 16px" }}>
+      <div style={{ textAlign: "center", marginBottom: 32 }}>
+        <div style={{ fontSize: 40, marginBottom: 10 }}>🧠</div>
+        <h2 style={{ fontSize: "1.5rem", color: "var(--text-primary)", marginBottom: 8 }}>Endless Review Mode</h2>
+        <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem" }}>Spaced repetition reinforces learning. Earn +10 XP for every correct answer!</p>
+        <div style={{ display: "inline-flex", gap: 16, marginTop: 16 }}>
+          <span style={{ fontSize: "0.85rem", color: "var(--text-accent)", fontWeight: 600, fontFamily: "var(--font-mono)", background: "rgba(20,184,166,0.1)", padding: "4px 10px", borderRadius: 6 }}>Current Streak: {streak}</span>
+          <button onClick={onExit} style={{ background: "transparent", border: "1px solid var(--border-subtle)", color: "var(--text-secondary)", borderRadius: 6, padding: "4px 10px", fontSize: "0.85rem", cursor: "pointer" }}>Exit Review</button>
+        </div>
+      </div>
+
+      <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-subtle)", padding: 24, borderRadius: 12 }}>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase", fontFamily: "var(--font-mono)", marginBottom: 8 }}>Reviewing: {currentStep.title}</div>
+        <Quiz key={`review-${qIndex}-${currentStep.id}`} act={currentStep.activity} stepId={currentStep.id} onAnswer={handleReviewAnswer} />
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
    SIDEBAR ITEM
    ═══════════════════════════════════════════════════════════════════════════ */
-const SidebarItem = memo(function SidebarItem({ s, idx, active, done, unlocked, phColor, onClick }) {
+const SidebarItem = memo(function SidebarItem({ s, active, done, unlocked, phColor, hasNote, onClick }) {
   return (
     <button onClick={onClick} aria-current={active ? "step" : undefined} disabled={!unlocked}
       style={{
@@ -816,10 +1037,11 @@ const SidebarItem = memo(function SidebarItem({ s, idx, active, done, unlocked, 
         background: done ? `linear-gradient(135deg, ${phColor}cc, ${phColor}88)` : active ? "rgba(20,184,166,0.15)" : "rgba(30,41,59,0.4)",
         border: active ? "1px solid rgba(20,184,166,0.4)" : "1px solid rgba(51,65,85,0.2)", color: "#f0fdfa"
       }}>{done ? "✓" : unlocked ? s.icon : "🔒"}</div>
-      <div style={{ minWidth: 0, overflow: "hidden" }}>
+      <div style={{ minWidth: 0, overflow: "hidden", flex: 1 }}>
         <div style={{ fontSize: 12, fontWeight: active ? 600 : 500, color: active ? "var(--text-accent)" : unlocked ? "#cbd5e1" : "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.title}</div>
         <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-mono)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.conceptName}</div>
       </div>
+      {hasNote && <span title="Contains a note" style={{ fontSize: 12, opacity: active ? 1 : 0.6 }}>📝</span>}
     </button>
   );
 });
@@ -832,6 +1054,9 @@ function AppCore() {
   const [sidebar, setSidebar] = useState(false);
   const [confetti, setConfetti] = useState(false);
   const [modal, setModal] = useState(false);
+  const [notesMap, setNotesMap] = useState({});
+  const [reviewMode, setReviewMode] = useState(false); // TIER 3
+
   const contentRef = useRef(null);
   const toast = useToast();
   const mountedRef = useRef(false);
@@ -839,13 +1064,28 @@ function AppCore() {
   const curStep = steps[prog.step] || steps[0];
   const totalXP = steps.length * 50;
   const canNext = prog.answers[curStep.id] === curStep.activity.correctIndex;
+  
+  // Custom Playground state logic
+  const [playgroundPassed, setPlaygroundPassed] = useState(false);
+  const requiresPlayground = !!curStep.playground;
+  const isModuleReadyForNext = canNext && (!requiresPlayground || playgroundPassed);
+
   const phaseMeta = phases.find(p => p.id === curStep.phase);
   const completePct = (prog.completed.length / steps.length) * 100;
   const allDone = prog.completed.length === steps.length;
 
   useEffect(() => {
+    // Initial Note Scan
+    const nm = {};
+    steps.forEach(s => { if (localStorage.getItem(`agentic-notes-${s.id}`)) nm[s.id] = true; });
+    setNotesMap(nm);
+
     if (prog.step > 0) setTimeout(() => toast.show(`Welcome back — resuming Module ${prog.step + 1}`, "info"), 300);
     mountedRef.current = true;
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const updateNoteState = useCallback((stepId, hasNote) => {
+    setNotesMap(p => ({ ...p, [stepId]: hasNote }));
   }, []);
 
   const saveTimerRef = useRef(null);
@@ -856,21 +1096,25 @@ function AppCore() {
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   }, [prog]);
 
-  useEffect(() => { contentRef.current?.scrollTo({ top: 0, behavior: "smooth" }); }, [prog.step]);
+  useEffect(() => { 
+    contentRef.current?.scrollTo({ top: 0, behavior: "smooth" }); 
+    setPlaygroundPassed(false); // reset playground state on step change
+  }, [prog.step, reviewMode]);
 
+  // Keyboard Navigation
   const progRef = useRef(prog); progRef.current = prog;
-  const canNextRef = useRef(canNext); canNextRef.current = canNext;
+  const canNextRef = useRef(isModuleReadyForNext); canNextRef.current = isModuleReadyForNext;
 
   useEffect(() => {
     const handler = (e) => {
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA" || e.target.tagName === "BUTTON") return;
       const p = progRef.current;
-      if ((e.key === "n" || e.key === "N") && canNextRef.current && p.step < steps.length - 1) setProg(prev => ({ ...prev, step: prev.step + 1 }));
-      if ((e.key === "p" || e.key === "P") && p.step > 0) setProg(prev => ({ ...prev, step: prev.step - 1 }));
+      if ((e.key === "n" || e.key === "N") && canNextRef.current && p.step < steps.length - 1 && !reviewMode) setProg(prev => ({ ...prev, step: prev.step + 1 }));
+      if ((e.key === "p" || e.key === "P") && p.step > 0 && !reviewMode) setProg(prev => ({ ...prev, step: prev.step - 1 }));
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [reviewMode]);
 
   const isUnlocked = useCallback((idx) => idx === 0 || prog.completed.includes(steps[idx - 1]?.id), [prog.completed]);
 
@@ -880,12 +1124,25 @@ function AppCore() {
       const ok = ans === currentStep.activity.correctIndex;
       const already = prev.answers[currentStep.id] != null;
       const newXP = ok && !already ? prev.xp + 50 : prev.xp;
+      
       const newCompleted = ok && !prev.completed.includes(currentStep.id) ? [...prev.completed, currentStep.id] : prev.completed;
       const newStreak = ok && !already ? prev.streak + 1 : ok ? prev.streak : 0;
       const newMax = Math.max(newStreak, prev.maxStreak);
+      
       if (ok && !already) setConfetti(true);
+
+      // TIER 1: Grand completion toast
+      if (newCompleted.length === steps.length && !already) {
+        setTimeout(() => toast.show(`🎉 Masterful! Course Complete!`, "success"), 500);
+      }
+
       return { ...prev, answers: { ...prev.answers, [currentStep.id]: ans }, xp: newXP, completed: newCompleted, streak: newStreak, maxStreak: newMax };
     });
+  }, [toast]);
+
+  // Special XP adder for Review Mode
+  const addReviewXP = useCallback((amount) => {
+    setProg(p => ({ ...p, xp: p.xp + amount }));
   }, []);
 
   useEffect(() => {
@@ -894,20 +1151,57 @@ function AppCore() {
 
   const goStep = useCallback((idx) => {
     if (idx < 0 || idx >= steps.length) return;
-    if (!isUnlocked(idx)) { toast.show("Complete the previous module to unlock.", "warn"); return; }
+    if (!isUnlocked(idx)) { 
+      triggerHaptic("error");
+      toast.show("Complete the previous module to unlock.", "warn"); 
+      return; 
+    }
+    setReviewMode(false);
     setProg(p => ({ ...p, step: idx }));
     setSidebar(false);
   }, [isUnlocked, toast]);
 
-  const goNext = useCallback(() => setProg(p => p.step < steps.length - 1 ? { ...p, step: p.step + 1 } : p), []);
+  const goNext = useCallback(() => {
+    if (!isModuleReadyForNext) { triggerHaptic('warn'); return; }
+    setProg(p => p.step < steps.length - 1 ? { ...p, step: p.step + 1 } : p)
+  }, [isModuleReadyForNext]);
+  
   const goPrev = useCallback(() => setProg(p => p.step > 0 ? { ...p, step: p.step - 1 } : p), []);
+  
   const resetAll = useCallback(() => {
     const fresh = { ...defaultState, started: Date.now() };
-    setProg(fresh); setModal(false); saveToStorage(fresh); toast.show("Progress reset. Starting fresh!", "info");
+    setProg(fresh); setModal(false); setReviewMode(false); saveToStorage(fresh); toast.show("Progress reset. Starting fresh!", "info");
+  }, [toast]);
+
+  // TIER 2: Export Notes
+  const handleExportNotes = useCallback(() => {
+    let content = "# My Agentic AI Course Notes\n\n";
+    let hasContent = false;
+    steps.forEach(s => {
+      const n = localStorage.getItem(`agentic-notes-${s.id}`);
+      if (n) {
+        content += `## Module ${s.id}: ${s.title}\n${n}\n\n---\n\n`;
+        hasContent = true;
+      }
+    });
+
+    if (!hasContent) {
+      toast.show("No notes found to export.", "warn");
+      return;
+    }
+
+    const blob = new Blob([content], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'agentic_ai_notes.md';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.show("Notes exported successfully!", "success");
   }, [toast]);
 
   return (
-    <div style={{ height: "100dvh", width: "100%", background: "var(--bg-primary)", color: "var(--text-primary)", fontFamily: "var(--font-body)", display: "flex", flexDirection: "column", position: "relative" }}>
+    <div style={{ height: "100dvh", width: "100%", background: "var(--bg-primary)", color: "var(--text-primary)", fontFamily: "var(--font-body)", display: "flex", flexDirection: "column", position: "relative", overflow: "hidden" }}>
       <style>{CSS_VARS}{GLOBAL_STYLES}</style>
 
       {confetti && <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 200 }} aria-hidden="true">
@@ -937,7 +1231,7 @@ function AppCore() {
               <button onClick={() => setSidebar(!sidebar)} style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", borderRadius: 7, padding: "5px 9px", cursor: "pointer", color: "var(--text-secondary)", fontSize: 16, flexShrink: 0 }}>☰</button>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontFamily: "var(--font-mono)", fontSize: "clamp(9px, 2vw, 10px)", color: "var(--text-accent)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.1em" }}>Agentic AI Navigator</div>
-                <div style={{ fontSize: "clamp(10px, 2.5vw, 12px)", color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Module {curStep.id} of {steps.length} · Phase {curStep.phase}</div>
+                <div style={{ fontSize: "clamp(10px, 2.5vw, 12px)", color: "var(--text-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{reviewMode ? "Review Mode Active" : `Module ${curStep.id} of ${steps.length} · Phase ${curStep.phase}`}</div>
               </div>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
@@ -947,9 +1241,9 @@ function AppCore() {
                 <div style={{ flex: 1, height: 6, borderRadius: 3, background: "rgba(30,41,59,0.7)", overflow: "hidden" }}>
                   <div style={{ height: "100%", borderRadius: 3, transition: "width 0.5s cubic-bezier(0.4,0,0.2,1)", background: "linear-gradient(90deg,#0d9488,#06b6d4,#3b82f6)", width: `${Math.min((prog.xp / totalXP) * 100, 100)}%` }} />
                 </div>
-                <span style={{ fontSize: "clamp(10px, 2vw, 11px)", color: "var(--text-accent)", fontFamily: "var(--font-mono)", fontWeight: 600, whiteSpace: "nowrap" }}>{prog.xp}/{totalXP}</span>
+                <span style={{ fontSize: "clamp(10px, 2vw, 11px)", color: "var(--text-accent)", fontFamily: "var(--font-mono)", fontWeight: 600, whiteSpace: "nowrap" }}>{prog.xp}</span>
               </div>
-              {allDone && <div className="hide-mobile" style={{ padding: "3px 10px", borderRadius: 16, background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.25)", fontSize: 11, fontWeight: 600, color: "#fbbf24", fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}>🏆</div>}
+              {allDone && !reviewMode && <div className="hide-mobile" style={{ padding: "3px 10px", borderRadius: 16, background: "rgba(234,179,8,0.12)", border: "1px solid rgba(234,179,8,0.25)", fontSize: 11, fontWeight: 600, color: "#fbbf24", fontFamily: "var(--font-mono)", whiteSpace: "nowrap" }}>🏆</div>}
             </div>
           </div>
           <div style={{ height: 3, borderRadius: 2, background: "rgba(30,41,59,0.5)" }}>
@@ -961,8 +1255,8 @@ function AppCore() {
       <div style={{ display: "flex", flex: 1, overflow: "hidden", minHeight: 0 }}>
         {sidebar && <div onClick={() => setSidebar(false)} aria-hidden="true" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 40 }} />}
 
-        <aside style={{ position: "fixed", left: sidebar ? 0 : "calc(-1 * var(--sidebar-w) - 16px)", top: 0, bottom: 0, width: "min(var(--sidebar-w), 85vw)", zIndex: 45, paddingTop: "calc(var(--safe-top) + 60px)", paddingBottom: "calc(16px + var(--safe-bottom))", background: "rgba(2,6,23,0.97)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", borderRight: "1px solid var(--border-subtle)", transition: "left 0.3s cubic-bezier(0.4,0,0.2,1)", overflowY: "auto", WebkitOverflowScrolling: "touch" }}>
-          <div style={{ padding: "0 12px" }}>
+        <aside style={{ position: "fixed", left: sidebar ? 0 : "calc(-1 * var(--sidebar-w) - 16px)", top: 0, bottom: 0, width: "min(var(--sidebar-w), 85vw)", zIndex: 45, paddingTop: "calc(var(--safe-top) + 60px)", paddingBottom: "calc(16px + var(--safe-bottom))", background: "rgba(2,6,23,0.97)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", borderRight: "1px solid var(--border-subtle)", transition: "left 0.3s cubic-bezier(0.4,0,0.2,1)", overflowY: "auto", WebkitOverflowScrolling: "touch", display: "flex", flexDirection: "column" }}>
+          <div style={{ padding: "0 12px", flex: 1 }}>
             {phases.map(ph => {
               const phSteps = steps.filter(s => s.phase === ph.id);
               const phComplete = phSteps.filter(s => prog.completed.includes(s.id)).length;
@@ -973,87 +1267,116 @@ function AppCore() {
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: ph.color, textTransform: "uppercase", letterSpacing: "0.08em" }}>{ph.name}</span>
                     <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{phComplete}/{phSteps.length}</span>
                   </div>
-                  {phSteps.map(s => (
-                    <SidebarItem key={s.id} s={s} idx={steps.indexOf(s)} active={steps.indexOf(s) === prog.step} done={prog.completed.includes(s.id)} unlocked={isUnlocked(steps.indexOf(s))} phColor={ph.color} onClick={() => goStep(steps.indexOf(s))} />
-                  ))}
+                  {phSteps.map((s, idxInPhase) => {
+                    const globalIdx = steps.indexOf(s);
+                    return <SidebarItem key={s.id} s={s} active={globalIdx === prog.step && !reviewMode} done={prog.completed.includes(s.id)} unlocked={isUnlocked(globalIdx)} phColor={ph.color} hasNote={notesMap[s.id]} onClick={() => goStep(globalIdx)} />;
+                  })}
                 </div>
               );
             })}
-            <div style={{ padding: "12px 6px", borderTop: "1px solid var(--border-subtle)", marginTop: 8 }}>
+          </div>
+          
+          <div style={{ padding: "12px", borderTop: "1px solid var(--border-subtle)", marginTop: "auto" }}>
+            <button onClick={handleExportNotes} style={{ width: "100%", padding: "8px", borderRadius: 8, background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.3)", color: "#93c5fd", cursor: "pointer", fontFamily: "var(--font-body)", fontSize: 12, fontWeight: 600, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, marginBottom: 8 }}>
+              📥 Export My Notes
+            </button>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <button onClick={() => { setModal(true); setSidebar(false); }} style={{ fontSize: 11, color: "#64748b", background: "none", border: "none", cursor: "pointer", fontFamily: "var(--font-mono)", padding: "4px 0" }}>↻ Reset Progress</button>
-              <div className="hide-mobile" style={{ marginTop: 8, fontSize: 10, color: "#334155", fontFamily: "var(--font-mono)" }}>Shortcuts: N = next, P = prev</div>
+              <div className="hide-mobile" style={{ fontSize: 10, color: "#334155", fontFamily: "var(--font-mono)" }}>N=next, P=prev</div>
             </div>
           </div>
         </aside>
 
+        {/* Main View Area (Switches between Review Mode and Standard Module) */}
         <main ref={contentRef} style={{ flex: 1, overflowY: "auto", minHeight: 0, WebkitOverflowScrolling: "touch", padding: "28px 16px calc(80px + var(--safe-bottom))", paddingLeft: "calc(16px + var(--safe-left))", paddingRight: "calc(16px + var(--safe-right))" }}>
-          <div style={{ maxWidth: "var(--content-max)", margin: "0 auto" }}>
-            <div className="fade-up" key={`h-${curStep.id}`}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
-                <span style={{ padding: "3px 10px", borderRadius: 6, fontSize: 10, fontWeight: 600, fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em", color: phaseMeta?.color || "var(--text-accent)", background: `${phaseMeta?.color || "#14b8a6"}15`, border: `1px solid ${phaseMeta?.color || "#14b8a6"}30` }}>
-                  Phase {curStep.phase} · Module {curStep.id}
-                </span>
-                {prog.completed.includes(curStep.id) && <span style={{ padding: "3px 10px", borderRadius: 6, fontSize: 10, fontWeight: 600, color: "#86efac", background: "rgba(22,163,74,0.1)", border: "1px solid rgba(34,197,94,0.2)", fontFamily: "var(--font-mono)" }}>✓ Completed</span>}
-              </div>
-              <h1 style={{ fontSize: "clamp(1.4rem, 5vw, 1.8rem)", fontWeight: 700, letterSpacing: "-0.025em", background: "linear-gradient(135deg, #e2e8f0, #94a3b8)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", lineHeight: 1.2, marginBottom: 3 }}>{curStep.title}</h1>
-              <p style={{ fontFamily: "var(--font-mono)", fontSize: "clamp(11px, 3vw, 13px)", color: phaseMeta?.color || "var(--text-accent)", fontWeight: 500 }}>{curStep.conceptName}</p>
-            </div>
-
-            <div className="fade-up" key={`c-${curStep.id}`} style={{ marginTop: 20, animationDelay: "0.08s" }}>
-              <Md text={curStep.markdownContent} />
-            </div>
-
-            <div className="fade-up" key={`d-${curStep.id}`} style={{ marginTop: 26, animationDelay: "0.16s" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-                <span style={{ fontSize: 13 }} aria-hidden="true">📐</span>
-                <h4 style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-accent)", textTransform: "uppercase", letterSpacing: "0.1em", margin: 0 }}>Architecture Diagram</h4>
-              </div>
-              <Diagram data={curStep.diagram} stepId={curStep.id} />
-            </div>
-
-            <div className="fade-up" key={`k-${curStep.id}`} style={{ marginTop: 22, animationDelay: "0.24s" }}>
-              <div style={{ padding: 16, borderRadius: 10, background: `linear-gradient(135deg, ${phaseMeta?.color || "#14b8a6"}06, ${phaseMeta?.color || "#14b8a6"}03)`, border: `1px solid ${phaseMeta?.color || "#14b8a6"}18` }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-                  <span style={{ fontSize: 13 }} aria-hidden="true">💎</span>
-                  <h4 style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: phaseMeta?.color || "var(--text-accent)", textTransform: "uppercase", letterSpacing: "0.08em", margin: 0 }}>Key Takeaways</h4>
+          
+          {reviewMode ? (
+            <ReviewMode onExit={() => setReviewMode(false)} onCorrectScore={addReviewXP} />
+          ) : (
+            <div style={{ maxWidth: "var(--content-max)", margin: "0 auto" }}>
+              <div className="fade-up" key={`h-${curStep.id}`}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
+                  <span style={{ padding: "3px 10px", borderRadius: 6, fontSize: 10, fontWeight: 600, fontFamily: "var(--font-mono)", textTransform: "uppercase", letterSpacing: "0.08em", color: phaseMeta?.color || "var(--text-accent)", background: `${phaseMeta?.color || "#14b8a6"}15`, border: `1px solid ${phaseMeta?.color || "#14b8a6"}30` }}>
+                    Phase {curStep.phase} · Module {curStep.id}
+                  </span>
+                  {prog.completed.includes(curStep.id) && <span style={{ padding: "3px 10px", borderRadius: 6, fontSize: 10, fontWeight: 600, color: "#86efac", background: "rgba(22,163,74,0.1)", border: "1px solid rgba(34,197,94,0.2)", fontFamily: "var(--font-mono)" }}>✓ Completed</span>}
                 </div>
-                {curStep.keyTakeaways.map((t, i) => (
-                  <div key={i} style={{ display: "flex", gap: 8, marginBottom: 4, alignItems: "center" }}>
-                    <span style={{ color: phaseMeta?.color || "#14b8a6", fontSize: 12, flexShrink: 0 }} aria-hidden="true">→</span>
-                    <span style={{ color: "#cbd5e1", fontSize: "0.84rem", lineHeight: 1.45 }}>{t}</span>
+                <h1 style={{ fontSize: "clamp(1.4rem, 5vw, 1.8rem)", fontWeight: 700, letterSpacing: "-0.025em", background: "linear-gradient(135deg, #e2e8f0, #94a3b8)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", lineHeight: 1.2, marginBottom: 3 }}>{curStep.title}</h1>
+                <p style={{ fontFamily: "var(--font-mono)", fontSize: "clamp(11px, 3vw, 13px)", color: phaseMeta?.color || "var(--text-accent)", fontWeight: 500 }}>{curStep.conceptName}</p>
+              </div>
+
+              <div className="fade-up" key={`c-${curStep.id}`} style={{ animationDelay: "0.08s" }}>
+                <ContentBlock step={curStep} />
+              </div>
+
+              <div className="fade-up" key={`d-${curStep.id}`} style={{ marginTop: 26, animationDelay: "0.16s" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+                  <span style={{ fontSize: 13 }} aria-hidden="true">📐</span>
+                  <h4 style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: "var(--text-accent)", textTransform: "uppercase", letterSpacing: "0.1em", margin: 0 }}>Architecture Diagram</h4>
+                </div>
+                <Diagram data={curStep.diagram} stepId={curStep.id} />
+              </div>
+
+              <div className="fade-up" key={`k-${curStep.id}`} style={{ marginTop: 22, animationDelay: "0.24s" }}>
+                <div style={{ padding: 16, borderRadius: 10, background: `linear-gradient(135deg, ${phaseMeta?.color || "#14b8a6"}06, ${phaseMeta?.color || "#14b8a6"}03)`, border: `1px solid ${phaseMeta?.color || "#14b8a6"}18` }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+                    <span style={{ fontSize: 13 }} aria-hidden="true">💎</span>
+                    <h4 style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: phaseMeta?.color || "var(--text-accent)", textTransform: "uppercase", letterSpacing: "0.08em", margin: 0 }}>Key Takeaways</h4>
                   </div>
-                ))}
+                  {curStep.keyTakeaways.map((t, i) => (
+                    <div key={i} style={{ display: "flex", gap: 8, marginBottom: 4, alignItems: "center" }}>
+                      <span style={{ color: phaseMeta?.color || "#14b8a6", fontSize: 12, flexShrink: 0 }} aria-hidden="true">→</span>
+                      <span style={{ color: "#cbd5e1", fontSize: "0.84rem", lineHeight: 1.45 }}>{t}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
 
-            <div className="fade-up" key={`q-${curStep.id}`} style={{ animationDelay: "0.32s" }}>
-              <Quiz act={curStep.activity} stepId={curStep.id} savedAns={prog.answers[curStep.id]} onAnswer={handleAnswer} />
-            </div>
-
-            <div className="fade-up" key={`notes-${curStep.id}`} style={{ animationDelay: "0.40s" }}>
-              <NotesPad stepId={curStep.id} />
-            </div>
-
-            <nav style={{ marginTop: 32, display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 20, borderTop: "1px solid var(--border-subtle)", gap: 8 }}>
-              <button onClick={goPrev} disabled={prog.step === 0} style={{ padding: "8px 14px", borderRadius: 8, background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", color: prog.step === 0 ? "#1e293b" : "var(--text-secondary)", cursor: prog.step === 0 ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 500, fontFamily: "inherit" }}>← <span className="hide-small">Prev</span> <span className="hide-mobile" style={{ fontSize: 10, opacity: 0.5 }}>(P)</span></button>
-              {prog.step < steps.length - 1 ? (
-                <button onClick={goNext} disabled={!canNext} style={{ padding: "8px 18px", borderRadius: 8, background: canNext ? `linear-gradient(135deg, ${phaseMeta?.color || "#0d9488"}, #0891b2)` : "rgba(30,41,59,0.3)", border: canNext ? `1px solid ${phaseMeta?.color || "#14b8a6"}55` : "1px solid rgba(51,65,85,0.15)", color: canNext ? "#f0fdfa" : "#334155", cursor: canNext ? "pointer" : "not-allowed", fontSize: 13, fontWeight: 600, fontFamily: "inherit", animation: canNext ? "pulse-border 2s ease-in-out infinite" : "none" }}><span className="hide-small">Next</span> → <span className="hide-mobile" style={{ fontSize: 10, opacity: 0.6 }}>(N)</span></button>
-              ) : canNext ? (
-                <div style={{ padding: "8px 18px", borderRadius: 8, background: "rgba(234,179,8,0.1)", border: "1px solid rgba(234,179,8,0.25)", color: "#fbbf24", fontSize: 13, fontWeight: 600, fontFamily: "var(--font-mono)" }}>🏆 Complete!</div>
-              ) : (
-                <span style={{ color: "#334155", fontSize: 12 }}>Answer correctly to finish</span>
+              {/* Conditional Playground Render */}
+              {curStep.playground && (
+                <div className="fade-up" style={{ animationDelay: "0.30s" }}>
+                  <RagPlayground data={curStep.playground.scenario} onPass={() => setPlaygroundPassed(true)} />
+                </div>
               )}
-            </nav>
 
-            {allDone && prog.step === steps.length - 1 && (
-              <div style={{ marginTop: 28, padding: "clamp(18px, 4vw, 28px)", borderRadius: 14, textAlign: "center", background: "linear-gradient(135deg, rgba(20,184,166,0.06), rgba(59,130,246,0.04))", border: "1px solid rgba(20,184,166,0.15)" }}>
-                <div style={{ fontSize: 44, marginBottom: 10 }} aria-hidden="true">🎓</div>
-                <h2 style={{ fontSize: "clamp(1.1rem, 4vw, 1.35rem)", fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>Congratulations!</h2>
-                <p style={{ color: "var(--text-secondary)", fontSize: "0.88rem", lineHeight: 1.55, maxWidth: 480, margin: "0 auto 16px" }}>You've mastered the full Agentic AI curriculum — from ReAct fundamentals through Advanced RAG, evaluation, multi-agent orchestration, and production systems.</p>
-                <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 18px", borderRadius: 8, background: "linear-gradient(135deg, #0d9488, #0891b2)", fontSize: 13, fontWeight: 600, color: "#f0fdfa", flexWrap: "wrap", justifyContent: "center" }}>⚡ {prog.xp} / {totalXP} XP · 🔥 Best Streak: {prog.maxStreak}</div>
+              <div className="fade-up" key={`q-${curStep.id}`} style={{ animationDelay: "0.32s", opacity: requiresPlayground && !playgroundPassed ? 0.3 : 1, pointerEvents: requiresPlayground && !playgroundPassed ? 'none' : 'auto' }}>
+                <Quiz act={curStep.activity} stepId={curStep.id} savedAns={prog.answers[curStep.id]} onAnswer={handleAnswer} />
               </div>
-            )}
-          </div>
+
+              <div className="fade-up" key={`notes-${curStep.id}`} style={{ animationDelay: "0.40s" }}>
+                <NotesPad stepId={curStep.id} onNoteStateChange={updateNoteState} />
+              </div>
+
+              <nav style={{ marginTop: 32, display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 20, borderTop: "1px solid var(--border-subtle)", gap: 8 }}>
+                <button onClick={goPrev} disabled={prog.step === 0} style={{ padding: "8px 14px", borderRadius: 8, background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", color: prog.step === 0 ? "#1e293b" : "var(--text-secondary)", cursor: prog.step === 0 ? "not-allowed" : "pointer", fontSize: 13, fontWeight: 500, fontFamily: "inherit" }}>← <span className="hide-small">Prev</span></button>
+                {prog.step < steps.length - 1 ? (
+                  <button onClick={goNext} disabled={!isModuleReadyForNext} style={{ padding: "8px 18px", borderRadius: 8, background: isModuleReadyForNext ? `linear-gradient(135deg, ${phaseMeta?.color || "#0d9488"}, #0891b2)` : "rgba(30,41,59,0.3)", border: isModuleReadyForNext ? `1px solid ${phaseMeta?.color || "#14b8a6"}55` : "1px solid rgba(51,65,85,0.15)", color: isModuleReadyForNext ? "#f0fdfa" : "#334155", cursor: isModuleReadyForNext ? "pointer" : "not-allowed", fontSize: 13, fontWeight: 600, fontFamily: "inherit", animation: isModuleReadyForNext ? "pulse-border 2s ease-in-out infinite" : "none" }}><span className="hide-small">Next</span> →</button>
+                ) : isModuleReadyForNext ? (
+                  <div style={{ padding: "8px 18px", borderRadius: 8, background: "rgba(234,179,8,0.1)", border: "1px solid rgba(234,179,8,0.25)", color: "#fbbf24", fontSize: 13, fontWeight: 600, fontFamily: "var(--font-mono)" }}>🏆 Course Complete!</div>
+                ) : (
+                  <span style={{ color: "#334155", fontSize: 12 }}>Answer correctly to finish</span>
+                )}
+              </nav>
+
+              {allDone && prog.step === steps.length - 1 && (
+                <div className="fade-in" style={{ marginTop: 28, padding: "clamp(18px, 4vw, 28px)", borderRadius: 14, textAlign: "center", background: "linear-gradient(135deg, rgba(20,184,166,0.06), rgba(59,130,246,0.04))", border: "1px solid rgba(20,184,166,0.15)" }}>
+                  <div style={{ fontSize: 44, marginBottom: 10 }} aria-hidden="true">🎓</div>
+                  <h2 style={{ fontSize: "clamp(1.1rem, 4vw, 1.35rem)", fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>Congratulations!</h2>
+                  <p style={{ color: "var(--text-secondary)", fontSize: "0.88rem", lineHeight: 1.55, maxWidth: 480, margin: "0 auto 16px" }}>You've mastered the full Agentic AI curriculum. Ready to test your true retention?</p>
+                  
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12, alignItems: "center", marginTop: 20 }}>
+                    <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 18px", borderRadius: 8, background: "var(--bg-elevated)", border: "1px solid var(--border-subtle)", fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>
+                      ⚡ {prog.xp} / {totalXP} XP · 🔥 Best Streak: {prog.maxStreak}
+                    </div>
+                    {/* TIER 3: Enter Review Mode Button */}
+                    <button onClick={() => { setReviewMode(true); window.scrollTo({top: 0}); }} style={{ padding: "10px 24px", borderRadius: 8, background: "linear-gradient(135deg, #8b5cf6, #6d28d9)", border: "1px solid #a78bfa", color: "#fff", fontWeight: 700, cursor: "pointer", fontSize: 14, fontFamily: "var(--font-body)", display: "flex", alignItems: "center", gap: 8, boxShadow: "0 4px 12px rgba(109, 40, 217, 0.4)" }}>
+                      <span>🔄</span> Enter Endless Review Mode
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </main>
       </div>
     </div>
@@ -1067,39 +1390,32 @@ const GLOBAL_STYLES = `
   @import url('https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
   html { -webkit-text-size-adjust: 100%; width: 100%; height: 100%; }
-
   body {
     background: var(--bg-primary); width: 100%; height: 100vh; height: 100dvh;
     overflow: hidden; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
   }
-
   #root { width: 100%; height: 100vh; height: 100dvh; overflow: hidden; }
 
   ::-webkit-scrollbar { width: 5px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
 
-  /* Animations */
   @keyframes confetti-drop { 0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; } 100% { transform: translateY(105vh) rotate(720deg); opacity: 0; } }
   @keyframes shake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
-  @keyframes toast-in { from { transform: translateX(40px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+  @keyframes toast-in { from { transform: translateX(40px) scale(0.9); opacity: 0; } to { transform: translateX(0) scale(1); opacity: 1; } }
   @keyframes pulse-border { 0%,100% { box-shadow: 0 0 16px rgba(20,184,166,0.15); } 50% { box-shadow: 0 0 32px rgba(20,184,166,0.3); } }
   @keyframes fade-up { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
   @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-  @keyframes dash-in { from { stroke-dasharray: 1000; stroke-dashoffset: 1000; } to { stroke-dasharray: 1000; stroke-dashoffset: 0; } }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-
+  
   .fade-up { animation: fade-up 0.45s ease-out forwards; }
   .fade-in { animation: fade-in 0.3s ease-out forwards; }
 
-  /* Markdown classes */
   .md-h3 { font-size: clamp(1.1rem, 3.5vw, 1.3rem); font-weight: 700; margin: 1.1rem 0 0.5rem; color: #e2e8f0; letter-spacing: -0.01em; }
   .md-h4 { font-size: clamp(0.95rem, 3vw, 1.05rem); font-weight: 600; margin: 0.9rem 0 0.4rem; color: #cbd5e1; }
   .md-bold { color: #5eead4; font-weight: 600; }
   .md-em { color: #94a3b8; }
-  .md-code { background: #1e293b; color: #a5b4fc; padding: 1px 5px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.85em; word-break: break-word; }
+  .md-code { background: #1e293b; color: #a5b4fc; padding: 2px 6px; border-radius: 4px; font-family: var(--font-mono); font-size: 0.85em; word-break: break-word; }
   .md-p { color: #94a3b8; line-height: 1.7; margin: 0.6rem 0; font-size: clamp(0.85rem, 2.5vw, 0.93rem); }
   .md-ol { display: flex; gap: 10px; margin: 6px 0 6px 2px; align-items: flex-start; }
   .md-ol-num { min-width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, #0d9488, #0891b2); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: #f0fdfa; flex-shrink: 0; }
@@ -1108,11 +1424,10 @@ const GLOBAL_STYLES = `
   .md-ul-dot { margin-top: 8px; width: 5px; height: 5px; border-radius: 50%; background: #14b8a6; flex-shrink: 0; }
   .md-ul-text { color: #cbd5e1; line-height: 1.55; font-size: clamp(0.84rem, 2.5vw, 0.92rem); }
 
-  /* Responsive helpers */
   @media (max-width: 480px) { .hide-mobile { display: none !important; } }
   @media (max-width: 360px) { .hide-small { display: none !important; } }
 
-  button:focus-visible, textarea:focus-visible { outline: 2px solid #5eead4; outline-offset: 2px; }
+  button:focus-visible, textarea:focus-visible, g[tabindex]:focus-visible { outline: 2px solid #5eead4; outline-offset: 2px; }
   button { -webkit-tap-highlight-color: transparent; }
   html, body { overscroll-behavior: none; }
 `;
