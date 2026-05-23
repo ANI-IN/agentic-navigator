@@ -9,7 +9,7 @@ const triggerHaptic = (type) => {
       if (type === "success") navigator.vibrate([100]); // Single solid pop
       if (type === "error") navigator.vibrate([40, 60, 40]); // Double stutter
       if (type === "warn") navigator.vibrate([30]); // Light tick
-    } catch (e) { /* ignore */ }
+    } catch { /* ignore */ }
   }
 };
 
@@ -643,9 +643,14 @@ const Diagram = memo(function Diagram({ data, stepId }) {
   const boxRef = useRef(null);
   const [dims, setDims] = useState({ w: 680, h: 280 });
   const [activeNode, setActiveNode] = useState(null);
+  const [prevStepId, setPrevStepId] = useState(stepId);
+
+  if (prevStepId !== stepId) {
+    setPrevStepId(stepId);
+    setActiveNode(null);
+  }
 
   useEffect(() => {
-    setActiveNode(null); 
     if (!boxRef.current) return;
     const update = () => {
       if (!boxRef.current) return;
@@ -816,15 +821,20 @@ const Diagram = memo(function Diagram({ data, stepId }) {
    TIER 1/2: PERSONAL NOTES SCRATCHPAD (With Clear Button)
    ═══════════════════════════════════════════════════════════════════════════ */
 const NotesPad = memo(function NotesPad({ stepId, onNoteStateChange }) {
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState(() => {
+    try { return localStorage.getItem(`agentic-notes-${stepId}`) || ""; } catch { return ""; }
+  });
   const [savedStatus, setSavedStatus] = useState("");
+  const [prevStepId, setPrevStepId] = useState(stepId);
   const timeoutRef = useRef(null);
 
-  useEffect(() => {
-    const saved = localStorage.getItem(`agentic-notes-${stepId}`);
-    setNote(saved || "");
+  if (prevStepId !== stepId) {
+    setPrevStepId(stepId);
+    let saved = "";
+    try { saved = localStorage.getItem(`agentic-notes-${stepId}`) || ""; } catch { /* ignore */ }
+    setNote(saved);
     setSavedStatus("");
-  }, [stepId]);
+  }
 
   const handleChange = (e) => {
     const val = e.target.value;
@@ -979,8 +989,12 @@ const RagPlayground = memo(function RagPlayground({ data, onPass }) {
    ═══════════════════════════════════════════════════════════════════════════ */
 const ContentBlock = memo(function ContentBlock({ step }) {
   const [viewMode, setViewMode] = useState("theory");
+  const [prevStepId, setPrevStepId] = useState(step.id);
 
-  useEffect(() => setViewMode("theory"), [step.id]); // Reset on step change
+  if (prevStepId !== step.id) {
+    setPrevStepId(step.id);
+    setViewMode("theory");
+  }
 
   return (
     <div style={{ marginTop: 20 }}>
@@ -1046,14 +1060,16 @@ const Quiz = memo(function Quiz({ act, stepId, savedAns, onAnswer }) {
   const [sel, setSel] = useState(savedShuffledAns);
   const [show, setShow] = useState(savedAns != null);
   const [shake, setShake] = useState(null);
-  const [failedAttempts, setFailedAttempts] = useState(0); 
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [prevQuizKey, setPrevQuizKey] = useState({ stepId, savedAns });
   const ok = sel === shuffledCorrectIndex;
 
-  useEffect(() => {
+  if (prevQuizKey.stepId !== stepId || prevQuizKey.savedAns !== savedAns) {
+    setPrevQuizKey({ stepId, savedAns });
     setSel(savedAns != null ? originalIndexMap.indexOf(savedAns) : null);
     setShow(savedAns != null);
-    setFailedAttempts(0); 
-  }, [stepId, savedAns, originalIndexMap]);
+    setFailedAttempts(0);
+  }
 
   const pick = useCallback((displayIdx) => {
     if (show) return;
@@ -1213,9 +1229,15 @@ const SidebarItem = memo(function SidebarItem({ s, active, done, unlocked, phCol
 function AppCore() {
   const [prog, setProg] = useState(() => loadFromStorageSync());
   const [sidebar, setSidebar] = useState(false);
-  const [confetti, setConfetti] = useState(false);
+  const [confetti, setConfetti] = useState(null);
   const [modal, setModal] = useState(false);
-  const [notesMap, setNotesMap] = useState({});
+  const [notesMap, setNotesMap] = useState(() => {
+    const nm = {};
+    try {
+      steps.forEach(s => { if (localStorage.getItem(`agentic-notes-${s.id}`)) nm[s.id] = true; });
+    } catch { /* storage unavailable */ }
+    return nm;
+  });
   const [reviewMode, setReviewMode] = useState(false); // TIER 3
 
   const contentRef = useRef(null);
@@ -1236,11 +1258,6 @@ function AppCore() {
   const allDone = prog.completed.length === steps.length;
 
   useEffect(() => {
-    // Initial Note Scan
-    const nm = {};
-    steps.forEach(s => { if (localStorage.getItem(`agentic-notes-${s.id}`)) nm[s.id] = true; });
-    setNotesMap(nm);
-
     if (prog.step > 0) setTimeout(() => toast.show(`Welcome back - resuming Module ${prog.step + 1}`, "info"), 300);
     mountedRef.current = true;
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1257,14 +1274,23 @@ function AppCore() {
     return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
   }, [prog]);
 
-  useEffect(() => { 
-    contentRef.current?.scrollTo({ top: 0, behavior: "smooth" }); 
-    setPlaygroundPassed(false); // reset playground state on step change
+  const [prevNavKey, setPrevNavKey] = useState({ step: prog.step, reviewMode });
+  if (prevNavKey.step !== prog.step || prevNavKey.reviewMode !== reviewMode) {
+    setPrevNavKey({ step: prog.step, reviewMode });
+    setPlaygroundPassed(false);
+  }
+
+  useEffect(() => {
+    contentRef.current?.scrollTo({ top: 0, behavior: "smooth" });
   }, [prog.step, reviewMode]);
 
   // Keyboard Navigation
-  const progRef = useRef(prog); progRef.current = prog;
-  const canNextRef = useRef(isModuleReadyForNext); canNextRef.current = isModuleReadyForNext;
+  const progRef = useRef(prog);
+  const canNextRef = useRef(isModuleReadyForNext);
+  useEffect(() => {
+    progRef.current = prog;
+    canNextRef.current = isModuleReadyForNext;
+  });
 
   useEffect(() => {
     const handler = (e) => {
@@ -1290,7 +1316,19 @@ function AppCore() {
       const newStreak = ok && !already ? prev.streak + 1 : ok ? prev.streak : 0;
       const newMax = Math.max(newStreak, prev.maxStreak);
       
-      if (ok && !already) setConfetti(true);
+      if (ok && !already) {
+        const colors = ["#5eead4", "#3b82f6", "#a855f7", "#f59e0b", "#ec4899", "#22c55e"];
+        const specs = Array.from({ length: 40 }, (_, i) => ({
+          id: i,
+          left: Math.random() * 100,
+          size: 5 + Math.random() * 7,
+          duration: 1.2 + Math.random() * 1.5,
+          delay: Math.random() * 0.4,
+          round: Math.random() > 0.5,
+          color: colors[i % colors.length],
+        }));
+        setConfetti(specs);
+      }
 
       // TIER 1: Grand completion toast
       if (newCompleted.length === steps.length && !already) {
@@ -1307,7 +1345,7 @@ function AppCore() {
   }, []);
 
   useEffect(() => {
-    if (confetti) { const t = setTimeout(() => setConfetti(false), 2200); return () => clearTimeout(t); }
+    if (confetti) { const t = setTimeout(() => setConfetti(null), 2200); return () => clearTimeout(t); }
   }, [confetti]);
 
   const goStep = useCallback((idx) => {
@@ -1366,7 +1404,7 @@ function AppCore() {
       <style>{CSS_VARS}{GLOBAL_STYLES}</style>
 
       {confetti && <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 200 }} aria-hidden="true">
-        {Array.from({ length: 40 }).map((_, i) => <div key={i} style={{ position: "absolute", top: -8, left: `${Math.random() * 100}%`, width: `${5 + Math.random() * 7}px`, height: `${5 + Math.random() * 7}px`, borderRadius: Math.random() > 0.5 ? "50%" : "2px", background: ["#5eead4", "#3b82f6", "#a855f7", "#f59e0b", "#ec4899", "#22c55e"][i % 6], animation: `confetti-drop ${1.2 + Math.random() * 1.5}s ease-in ${Math.random() * 0.4}s forwards` }} />)}
+        {confetti.map(s => <div key={s.id} style={{ position: "absolute", top: -8, left: `${s.left}%`, width: `${s.size}px`, height: `${s.size}px`, borderRadius: s.round ? "50%" : "2px", background: s.color, animation: `confetti-drop ${s.duration}s ease-in ${s.delay}s forwards` }} />)}
       </div>}
 
       <div aria-hidden="true" style={{ position: "fixed", top: "-15%", right: "-8%", width: "clamp(200px, 40vw, 500px)", height: "clamp(200px, 40vw, 500px)", borderRadius: "50%", background: `radial-gradient(circle, ${phaseMeta?.color || "#14b8a6"}08, transparent 70%)`, pointerEvents: "none", transition: "background 0.8s" }} />
@@ -1428,7 +1466,7 @@ function AppCore() {
                     <span style={{ fontFamily: "var(--font-mono)", fontSize: 10, fontWeight: 700, color: ph.color, textTransform: "uppercase", letterSpacing: "0.08em" }}>{ph.name}</span>
                     <span style={{ marginLeft: "auto", fontSize: 10, color: "var(--text-muted)", fontFamily: "var(--font-mono)" }}>{phComplete}/{phSteps.length}</span>
                   </div>
-                  {phSteps.map((s, idxInPhase) => {
+                  {phSteps.map((s) => {
                     const globalIdx = steps.indexOf(s);
                     return <SidebarItem key={s.id} s={s} active={globalIdx === prog.step && !reviewMode} done={prog.completed.includes(s.id)} unlocked={isUnlocked(globalIdx)} phColor={ph.color} hasNote={notesMap[s.id]} onClick={() => goStep(globalIdx)} />;
                   })}
