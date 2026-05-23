@@ -12,7 +12,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`.
 - `docs/architecture.md` with high-level flow, sequence diagrams, and a "what lives where" map.
 - `docs/getting-started.md` with prerequisites, install steps, and a manual QA checklist.
-- `improvements/` audit reports: code review, security review, performance review, dependencies inventory, testing gaps, tech debt, accessibility review, and the `IMPROVEMENT_PLAN.md` index.
 - GitHub issue templates (bug, feature) and a pull request template.
 - `.github/workflows/ci.yml` for lint and build on every push and PR.
 - `Dockerfile` for containerized preview of the production build.

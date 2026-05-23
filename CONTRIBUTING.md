@@ -24,10 +24,10 @@ See `docs/getting-started.md` for the long version, including the manual QA chec
 ## What is in scope
 
 - Curriculum content: new modules, corrections to existing modules, better diagrams.
-- Accessibility improvements (see `improvements/accessibility-and-ux.md`).
-- Performance and bundle-size work (see `improvements/performance-review.md`).
-- Refactors that break `src/App.jsx` into smaller modules (see `improvements/tech-debt-and-refactoring.md` DEBT-01 for the proposed shape).
-- Tests, once a test framework is added (see `improvements/testing-gaps.md`).
+- Accessibility improvements (focus management, reduced-motion support, richer SVG descriptions).
+- Performance and bundle-size work (vendor / app chunk split, lazy-loaded phases).
+- Refactors that break `src/App.jsx` into smaller modules under `src/data/`, `src/lib/`, and `src/components/`.
+- Tests, once a test framework is added (Vitest plus `@testing-library/react` is the suggested baseline).
 - Documentation improvements.
 
 ## What is out of scope
@@ -83,13 +83,12 @@ If you have commit access, the review checklist is:
 3. Does `npm run build` succeed?
 4. Did the contributor run the manual QA checklist?
 5. Are there new dependencies? If yes, are they justified in the PR description?
-6. Does the change update or break any of the findings in `improvements/`?
+6. Does the change touch security-sensitive code (markdown renderer, deploy headers, `localStorage` schema)? If yes, call it out in the PR description.
 
 ## Where to find more context
 
-- `README.md` (after this PR lands, the corrected version).
+- `README.md` for the project overview.
 - `docs/architecture.md` for the system overview.
 - `docs/getting-started.md` for local setup.
-- `improvements/IMPROVEMENT_PLAN.md` for the audit findings and the prioritized roadmap.
 - `SECURITY.md` for the security disclosure path.
 - `CODE_OF_CONDUCT.md` for community expectations.

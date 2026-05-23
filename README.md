@@ -348,7 +348,7 @@ Append a new entry to the `phases` array at `src/App.jsx:19-26`. Pick an unused 
 
 ### Replace the markdown renderer
 
-The current `Md` component at `src/App.jsx:1016-1030` is a regex pipeline that builds HTML and feeds it to `dangerouslySetInnerHTML`. It is safe today because every input string is developer-authored. If you ever feed user-supplied or remote-fetched text through `Md`, replace it with `marked` plus `DOMPurify` first. The audit report at `improvements/security-review.md` (SEC-01) has the migration plan.
+The current `Md` component at `src/App.jsx:1016-1030` is a regex pipeline that builds HTML and feeds it to `dangerouslySetInnerHTML`. It is safe today because every input string is developer-authored. If you ever feed user-supplied or remote-fetched text through `Md`, replace it with `marked` plus `DOMPurify` first and sanitize the resulting HTML before rendering.
 
 ## Troubleshooting
 
@@ -389,15 +389,6 @@ agentic-navigator/
 │   ├── architecture.md          # mermaid diagrams + line-range map
 │   └── getting-started.md       # local setup + QA checklist
 ├── eslint.config.js             # ESLint 9 flat config
-├── improvements/                # advisory audit, evidence-based
-│   ├── IMPROVEMENT_PLAN.md      # read this first
-│   ├── accessibility-and-ux.md
-│   ├── code-review.md
-│   ├── dependencies.md
-│   ├── performance-review.md
-│   ├── security-review.md
-│   ├── testing-gaps.md
-│   └── tech-debt-and-refactoring.md
 ├── index.html                   # HTML shell with OG / Twitter card meta
 ├── netlify.toml                 # SPA redirect + security headers
 ├── package.json                 # name, engines, scripts, deps
@@ -480,7 +471,7 @@ If the site is published under a subpath (for example `https://user.github.io/ag
 
 ## Security Notes
 
-The audit at `improvements/security-review.md` documents the security posture in detail. The short version:
+Security posture in short:
 
 - **Markdown renderer uses `dangerouslySetInnerHTML`** (`src/App.jsx:1016-1030`). Today only developer-authored strings flow through it. If you ever route user content through it, swap to a sanitiser first.
 - **Strict Content-Security-Policy** is configured in `vercel.json` and `netlify.toml`. No inline scripts, no remote scripts, no framing.

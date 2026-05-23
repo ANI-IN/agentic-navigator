@@ -24,7 +24,7 @@ Walk through what you did. Include:
 - `npm run lint` exit code before this PR:
 - `npm run lint` exit code with this PR:
 
-If the count went up, explain why. The baseline is currently 12 errors (tracked in `improvements/code-review.md` CODE-02).
+If the count went up, explain why. The baseline is 0 errors; PRs should keep it that way.
 
 ## Bundle size impact
 

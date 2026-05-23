@@ -18,7 +18,7 @@ cd agentic-navigator
 npm install
 ```
 
-`npm install` pulls about 195 packages. It will warn about the unused `d3` dependency. That is a known finding tracked in `improvements/dependencies.md` (DEP-01); does not block running the app.
+`npm install` pulls about 195 packages. Only `react` and `react-dom` are runtime dependencies; everything else is dev tooling.
 
 ## Run the dev server
 
@@ -43,7 +43,7 @@ npm run preview    # serves dist/ on http://localhost:4173
 npm run lint
 ```
 
-Today this exits 1 with 12 pre-existing errors. See `improvements/code-review.md` (CODE-02) for details. Treat the current exit code as the baseline; PRs should not increase the error count.
+Today this exits 0 with no errors. Keep it that way; PRs that introduce lint errors should be fixed before merge.
 
 ## Manual QA checklist
 
@@ -68,7 +68,6 @@ If you change anything in `src/App.jsx`, run through the following before openin
 | `package.json` | Dependencies and scripts. |
 | `vite.config.js` | Vite configuration. |
 | `vercel.json` / `netlify.toml` | Deploy-target configs. |
-| `improvements/` | Audit reports. Read these before any larger change. |
 
 ## Where to look when adding a module
 
@@ -81,6 +80,5 @@ For a worked example, copy module 22 (the last entry in `steps`), increment the 
 
 ## Where to look when reporting a bug
 
-- `improvements/IMPROVEMENT_PLAN.md` for the existing known-issues list.
-- `improvements/code-review.md` and `improvements/security-review.md` for evidence-based findings.
+- `SECURITY.md` for the known risk areas and the security disclosure path.
 - Open a new GitHub issue using the bug template at `.github/ISSUE_TEMPLATE/bug_report.md`.

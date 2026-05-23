@@ -98,7 +98,7 @@ Schema (from `defaultState` at `src/App.jsx:573`):
 }
 ```
 
-The `v5` suffix on the key means the schema has been broken (and old keys discarded) four times. A user with `v4` data on their machine will see their progress reset on first load. This is intentional but undocumented in code today; see DEBT-04 in `../improvements/tech-debt-and-refactoring.md`.
+The `v5` suffix on the key means the schema has been broken (and old keys discarded) four times. A user with `v4` data on their machine will see their progress reset on first load. This is intentional; a future migration helper could lift forward old keys if that ever matters.
 
 ### Notes slice (`agentic-notes-<stepId>` in localStorage)
 
@@ -125,7 +125,7 @@ flowchart LR
   E -.never fed to Md today.-> RUN
 ```
 
-Today nothing user-authored is fed through the `Md` renderer (`src/App.jsx:1010-1024`), so the `dangerouslySetInnerHTML` call there is safe. If a future feature ever routes `NotesPad` content into `Md` (or any string the user could influence), the regex-based HTML construction becomes an XSS sink. See SEC-01 in `../improvements/security-review.md`.
+Today nothing user-authored is fed through the `Md` renderer (`src/App.jsx:1010-1024`), so the `dangerouslySetInnerHTML` call there is safe. If a future feature ever routes `NotesPad` content into `Md` (or any string the user could influence), the regex-based HTML construction becomes an XSS sink; add a sanitiser first.
 
 ## Invariants the design relies on
 

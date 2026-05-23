@@ -22,10 +22,8 @@ This project is a static SPA without versioned releases today. The only "support
 
 ## Known risk areas
 
-The audit reports under `improvements/` document the security surface in detail. The short version:
-
-- **`src/App.jsx:1010-1024`** uses `dangerouslySetInnerHTML` fed by a regex-built HTML string. Today the only inputs come from the developer-authored `steps` array (same file, lines 28-568), so this is safe. **Any future feature that routes user-supplied or remote-fetched text through `Md` would create an XSS sink.** See `improvements/security-review.md` SEC-01.
-- **No `Content-Security-Policy` headers** are configured on the Vercel or Netlify deploys. A future XSS would have full reach (inline scripts, external connections). See SEC-03.
+- **`src/App.jsx:1010-1024`** uses `dangerouslySetInnerHTML` fed by a regex-built HTML string. Today the only inputs come from the developer-authored `steps` array (same file, lines 28-568), so this is safe. **Any future feature that routes user-supplied or remote-fetched text through `Md` would create an XSS sink.** Add a sanitiser (e.g. `DOMPurify`) before that change.
+- **Content-Security-Policy** headers are configured on the Vercel and Netlify deploys (`vercel.json`, `netlify.toml`). They currently allow `unsafe-inline` on `style-src` because `src/App.jsx` injects a runtime `<style>` block; move those styles to a static stylesheet to tighten further.
 - **`localStorage`** stores progress and notes unencrypted. Any other script on the same origin can read both. This is fine for the current standalone deploy; flagged for any future intranet embed.
 
 ## What is explicitly out of scope
@@ -39,9 +37,9 @@ The audit reports under `improvements/` document the security surface in detail.
 If you deploy this app on your own infrastructure:
 
 1. Serve over HTTPS only.
-2. Set the security headers documented in `improvements/security-review.md` SEC-03.
+2. Reuse the headers in `vercel.json` / `netlify.toml` (CSP, HSTS, Referrer-Policy, X-Content-Type-Options, X-Frame-Options, Permissions-Policy).
 3. Keep dependencies fresh: `npm outdated` should be empty before each deploy.
-4. Do not extend the app to fetch curriculum content from a URL without sanitising the response (see SEC-01).
+4. Do not extend the app to fetch curriculum content from a URL without sanitising the response.
 
 ## Acknowledgements
 
