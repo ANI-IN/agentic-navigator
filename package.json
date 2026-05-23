@@ -1,16 +1,31 @@
 {
-  "name": "agent-app",
+  "name": "agentic-navigator",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "description": "Interactive, self-paced learning platform for mastering Agentic AI across 22 modules and 6 phases.",
+  "license": "MIT",
+  "author": "Animesh Kumar",
+  "homepage": "https://github.com/ANI-IN/agentic-navigator",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ANI-IN/agentic-navigator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ANI-IN/agentic-navigator/issues"
+  },
   "type": "module",
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "audit:check": "npm audit --audit-level=high",
+    "outdated": "npm outdated"
   },
   "dependencies": {
-    "d3": "^7.9.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
